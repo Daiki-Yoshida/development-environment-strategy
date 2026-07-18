@@ -6,6 +6,8 @@ target_audience: "ai_agents"
 language: "english"
 role: "routing hub for maintaining this repository"
 index_version: "1.0.0"
+last_updated_commit: "436c0b6"
+last_updated_date: "2026-07-19"
 ```
 
 ## Scope
@@ -20,6 +22,8 @@ The guidance exported to target projects lives under `artifacts/` and has its ow
 documents:
   - path: "documents/project/REPOSITORY_STRUCTURE.md"
     version: "1.0.0"
+    last_updated_commit: "994ab4d"
+    last_updated_date: "2026-07-19"
     purpose: "repository scope, directory ownership, and artifact maintenance rules"
 ```
 
