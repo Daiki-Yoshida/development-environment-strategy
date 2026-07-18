@@ -4,8 +4,8 @@
 document_type: "repository_structure"
 target_audience: "ai_agents"
 language: "english"
-document_version: "1.0.0"
-last_updated_commit: "994ab4d"
+document_version: "1.1.0"
+last_updated_commit: "586521c"
 last_updated_date: "2026-07-19"
 ```
 
@@ -22,8 +22,11 @@ It is a sibling of:
 
 ```yaml
 artifacts:
-  role: "exported AI-facing guidance for target projects"
+  role: "authoritative exported AI-facing guidance for target projects"
   rule: "generic and project-independent"
+docs-jp:
+  role: "readable Japanese translations of the exported artifacts"
+  rule: "human-facing derivative; keep a one-to-one file mapping and defer to artifacts when meanings differ"
 documents:
   role: "AI-facing context for maintaining this repository"
   rule: "never copied as part of the exported artifact set"
@@ -32,12 +35,12 @@ README.md:
 AGENTS.md:
   role: "AI-agent entry point and repository conventions"
 copy-environment-docs.sh:
-  role: "copies exported Markdown artifacts to a target directory"
+  role: "copies authoritative exported Markdown artifacts to a target directory"
 ```
 
 ## Exported Artifact Shape
 
-The artifact set is intentionally limited to five files:
+The authoritative artifact set is intentionally limited to five files:
 
 ```yaml
 INDEX.md: "routing and ownership"
@@ -51,23 +54,45 @@ Do not add a sixth artifact merely because a technology has many rules. Add a se
 
 Split the artifact set only when one file clearly owns multiple independent questions and task routing can reliably avoid loading both. A split is a structural change and should be discussed before implementation.
 
+## Japanese Translation Shape
+
+`docs-jp/` mirrors the five authoritative artifact filenames exactly.
+
+```yaml
+source_of_truth: "artifacts/"
+translation_root: "docs-jp/"
+file_mapping: "one authoritative artifact to one Japanese translation"
+export_behavior: "docs-jp is not copied by copy-environment-docs.sh"
+```
+
+Translation rules:
+
+- Preserve the source priority order, scope boundaries, safety levels, and normative meaning.
+- Prefer natural, readable Japanese over rigid word-for-word translation.
+- Keep stable technical terms such as Workspace Repository, Component Repository, Primary Checkout, and Task Worktree when translating them would make cross-reference harder.
+- State at the top of every translation that `artifacts/` is authoritative.
+- Update the corresponding Japanese file after an authoritative artifact changes.
+- Do not place new normative rules only in `docs-jp/`; change the owning artifact first.
+
 ## Content Rules
 
 - Keep generic artifacts independent of a specific project, language, cloud provider, or engine.
 - Use project-specific repositories as evidence, not as normative names or paths.
 - State rules through short prose, lists, and YAML when structure matters.
-- Do not repeat a rule across files; use the ownership map and cross-references.
+- Do not repeat a rule across authoritative artifact files; use the ownership map and cross-references.
 - Preserve load-bearing semantics even when reducing token use.
 - Put rationale in Philosophy, normative implementation rules in Standards, placement in Structure, and sequence/confirmation in Workflow.
 
 ## Maintenance Flow
 
 1. Read `artifacts/INDEX.md` and identify the owning document.
-2. Update only the owner unless routing also changes.
+2. Update only the authoritative owner unless routing also changes.
 3. Check sibling artifacts for duplication or contradiction.
 4. Verify links and filenames.
-5. Confirm the exported set still contains exactly the intended files.
-6. Update repository-local documentation only when repository maintenance behavior changes.
+5. Confirm the authoritative exported set still contains exactly the intended five files.
+6. Update the matching `docs-jp/` translation when user-facing meaning changed.
+7. Verify that translation wording did not change priority, scope, or safety semantics.
+8. Update repository-local documentation only when repository maintenance behavior changes.
 
 ## Scope Guard
 
