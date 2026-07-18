@@ -12,7 +12,7 @@ It defines how projects structure and operate their development workspace: host/
 
 ## Exported Artifacts
 
-AI-facing guidance lives under `artifacts/`:
+Authoritative AI-facing guidance lives under `artifacts/`:
 
 1. `INDEX.md` — entry point, ownership map, and task routing
 2. `DEVELOPMENT_ENVIRONMENT_PHILOSOPHY.md` — WHY: safety, reproducibility, isolation, and parallel development
@@ -21,6 +21,12 @@ AI-facing guidance lives under `artifacts/`:
 5. `ENVIRONMENT_WORKFLOW.md` — FLOW: setup, task worktree lifecycle, validation, integration, cleanup, and recovery
 
 Read `artifacts/INDEX.md` first.
+
+## Japanese Guide
+
+A readable Japanese translation of the five artifacts lives under `docs-jp/`.
+
+Read `docs-jp/INDEX.md` first. The English files under `artifacts/` remain authoritative if the two versions differ.
 
 ## Copy to a Target Project
 
