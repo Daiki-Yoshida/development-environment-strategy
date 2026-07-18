@@ -5,6 +5,8 @@ document_type: "repository_structure"
 target_audience: "ai_agents"
 language: "english"
 document_version: "1.0.0"
+last_updated_commit: "994ab4d"
+last_updated_date: "2026-07-19"
 ```
 
 ## Purpose
