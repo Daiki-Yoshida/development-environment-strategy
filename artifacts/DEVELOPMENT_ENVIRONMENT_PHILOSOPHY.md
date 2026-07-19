@@ -4,7 +4,7 @@
 document_type: "development_environment_philosophy"
 target_audience: "ai_agents"
 language: "english"
-strategy_version: "1.0.0"
+strategy_version: "1.1.0"
 ```
 
 ## Development Environment Contract
@@ -58,37 +58,58 @@ This separation reduces host mutation, version conflicts, accidental privilege e
 
 ```yaml
 workspace_repository:
-  meaning: "the repository that owns development tooling, workspace coordination, environment documents, and worktree management"
+  meaning: "the repository that owns development tooling, workspace coordination, environment documents, and optional worktree management"
 component_repository:
   meaning: "an independent repository that owns product code and its product history"
 primary_checkout:
-  meaning: "the stable checkout of a component repository used for synchronization, worktree creation, integration, and final inspection"
+  meaning: "the stable default checkout of a component repository; it may be used for one active writing task when project policy permits"
 task_worktree:
-  meaning: "a temporary checkout assigned to one task, one branch, and one writing agent"
+  meaning: "an additional temporary checkout created only when parallel writing or explicit isolation is needed"
 ```
 
 A Workspace Repository and Component Repository may have completely separate Git histories. This is a workspace relationship, not necessarily a Git submodule relationship.
 
 A single-repository project may use the same principles without creating a separate Workspace Repository. Do not add repository layers without a real coordination or isolation need.
 
-## Parallel-Agent Isolation
+## Checkout Selection Rule
 
-Parallel development requires more than separate branches.
+Worktree support is a capability, not a mandatory step for every task.
 
 ```yaml
-isolate_per_task:
+default:
+  checkout: "use the currently assigned checkout on an appropriate task branch"
+  condition: "one writing task is active and no separate checkout or runtime isolation is needed"
+create_task_worktree_when:
+  - "two or more writing tasks or agents must operate on the same Component Repository concurrently"
+  - "another branch must remain checked out at a stable path"
+  - "the user or project workflow explicitly requests a worktree"
+  - "the task needs an independently disposable checkout and mutable runtime state"
+do_not_create_task_worktree_when:
+  - "only one writing task is active"
+  - "the current checkout can safely switch to or already uses the task branch"
+  - "the only reason is that .worktrees/ exists or worktree commands are available"
+```
+
+Agents must choose the least complex checkout mode that satisfies safety and isolation requirements. Creating unnecessary worktrees adds state, cleanup cost, and opportunities for selecting the wrong checkout.
+
+## Parallel-Agent Isolation
+
+When parallel writing or explicit task isolation is active, separate branches alone are insufficient.
+
+```yaml
+isolate_per_parallel_task:
   - "branch"
   - "working directory"
   - "container namespace"
   - "network and host-port allocation"
   - "mutable volumes when state must not be shared"
   - "logs and generated outputs"
-rule: "one task worktree is owned by one writing agent at a time"
+rule: "one writable checkout is owned by one writing agent at a time"
 ```
 
 Shared read-only caches may be reused when safe. Mutable project state must not be shared merely for convenience.
 
-Task, branch, worktree, container namespace, and logs should be traceable through a common stable identity.
+When a Task Worktree is used, task, branch, worktree, container namespace, and logs should be traceable through a common stable identity.
 
 ## Explicit Operations
 
@@ -140,7 +161,7 @@ Do not solve safety by forcing repeated manual steps that agents will bypass. En
 governs:
   - "host and container responsibility"
   - "development tool execution"
-  - "repository and worktree topology"
+  - "repository and optional worktree topology"
   - "top-level environment directories"
   - "command interfaces and environment scripts"
   - "local/CI execution paths"
@@ -161,9 +182,10 @@ Code quality inside scripts is evaluated by `design-principles`. Placement and i
 misreadings:
   - "Docker-first != every operation must run in Docker; host control-plane operations may stay on the host"
   - "minimal host != a universal fixed allowlist; classify tools by responsibility"
-  - "one task worktree != one process; several read-only processes may inspect it, but only one agent owns writes"
+  - "worktree support != create a worktree for every task; use it only for parallelism or explicit isolation"
+  - "one writable checkout per agent != every agent needs a separate checkout when only one writing task exists"
   - "Workspace Repository != Git parent repository or mandatory submodule"
-  - "Primary Checkout != ordinary feature workspace; keep it stable for integration and management"
+  - "Primary Checkout != default branch only; it may host ordinary single-agent task-branch work when project policy permits"
   - "resource isolation != duplicate every cache; immutable or safely shareable caches may be shared"
   - "explicit names != mechanically prefix every command; add scope when meaning or side effects would otherwise be unclear"
   - "reproducibility != never update; updates must be intentional and reviewable"
