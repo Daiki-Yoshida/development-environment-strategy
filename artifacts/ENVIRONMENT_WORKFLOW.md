@@ -4,8 +4,8 @@
 document_type: "environment_workflow"
 target_audience: "ai_agents"
 language: "english"
-strategy_version: "1.0.0"
-scope: "setup, task worktree lifecycle, validation, integration, cleanup, and recovery"
+strategy_version: "1.1.0"
+scope: "setup, checkout selection, optional task worktrees, validation, integration, cleanup, and recovery"
 ```
 
 ## 1. New Project Setup
@@ -31,7 +31,7 @@ Choose the second form only when separate histories, stable component roots, sha
 ### Step 3: Create the Public Command Interface
 
 - Add a discoverable command router, normally a Makefile.
-- Add an optional shared wrapper when target/worktree selection or environment setup requires it.
+- Add an optional shared wrapper when checkout selection or environment setup requires it.
 - Put complex logic in `scripts/` or an equivalent owned location.
 - Define help, status/diagnosis, partial validation, canonical final validation, and scoped cleanup operations.
 - Separate normal and destructive operations.
@@ -42,18 +42,19 @@ Define deterministic names for:
 
 - workspace/project;
 - component;
-- task/worktree;
-- resource role.
+- resource role;
+- task/worktree only when separate task isolation is used.
 
 Ensure parallel tasks receive isolated mutable resources and non-conflicting host ports.
 
-### Step 5: Define Repository and Worktree Paths
+### Step 5: Define Repository and Optional Worktree Paths
 
 - Establish each Component Repository's Primary Checkout.
 - Ignore independent Component Repository paths from the Workspace Repository.
-- Create and ignore `.worktrees/`.
-- Select the task worktree naming rule.
-- Ensure commands can target a worktree without editing command internals.
+- Define and ignore `.worktrees/` only when worktree support is part of the workspace.
+- Select a worktree naming rule for the cases that require one.
+- Ensure commands can target either the current checkout or an explicitly selected worktree without editing command internals.
+- Do not create a Task Worktree during setup merely to prove that worktree support exists.
 
 ### Step 6: Verify Bootstrap
 
@@ -79,7 +80,7 @@ Classify existing behavior:
 host_dependencies: "installed runtimes, package managers, SDKs, and CLIs"
 entry_commands: "documented and undocumented build/test/deploy commands"
 container_state: "images, Compose files, names, ports, volumes, permissions"
-git_topology: "repository roots, embedded repositories, branches, and worktrees"
+git_topology: "repository roots, embedded repositories, branches, and optional worktrees"
 ci_behavior: "logic duplicated or diverging from local scripts"
 destructive_paths: "cleanup, reset, force removal, and data deletion"
 ```
@@ -90,7 +91,7 @@ destructive_paths: "cleanup, reset, force removal, and data deletion"
 2. Move project-specific execution into controlled containers.
 3. Normalize resource identity and ownership.
 4. Add diagnosis and canonical validation.
-5. Add or normalize worktree support when parallel development requires it.
+5. Add or normalize worktree support only when parallel development or explicit isolation requires it.
 6. Align CI with project-owned commands.
 
 Preserve working behavior while changing one environment boundary at a time.
@@ -100,33 +101,63 @@ Preserve working behavior while changing one environment boundary at a time.
 - Explicit project conventions outrank this generic strategy when they conflict; report the conflict.
 - Do not silently move repositories or delete environment state.
 - Do not introduce separate Workspace and Component repositories unless the task explicitly requires the structural change.
+- Do not introduce Task Worktrees when the current checkout already satisfies a single writing task.
 - Existing violations outside the requested scope are reported, not opportunistically rewritten.
 
-## 3. Task Worktree Lifecycle
+## 3. Checkout Selection and Optional Task Worktree Lifecycle
 
-### Create
+### Select the Checkout Mode
+
+Before editing, choose the least complex safe mode.
+
+```yaml
+current_or_primary_checkout:
+  use_when:
+    - "only one writing task is active for the Component Repository"
+    - "the checkout can safely use the task branch"
+    - "no stable secondary branch checkout is required"
+    - "separate mutable runtime state is unnecessary"
+  action: "use the assigned checkout; do not create a worktree"
+task_worktree:
+  use_when:
+    - "multiple writing tasks or agents must run concurrently"
+    - "another branch must remain checked out at a stable path"
+    - "the user or project workflow explicitly requests a worktree"
+    - "the task needs an independently disposable checkout and runtime state"
+  action: "create and explicitly select a Task Worktree"
+```
+
+The existence of `.worktrees/`, worktree helper commands, or a TASK_ID is not sufficient reason to create a worktree.
+
+### Prepare the Selected Checkout
+
+For either mode:
+
+- identify the Component Repository;
+- identify the task and task branch;
+- verify the selected checkout belongs to the intended repository;
+- synchronize refs according to project policy;
+- ensure only one writing agent owns that writable checkout.
+
+When using the Primary Checkout, switch to or create the task branch according to project policy. Do not implement directly on the protected/default branch.
+
+### Create a Task Worktree When Required
 
 Before creation:
 
-- identify the Component Repository;
-- identify the task and branch;
+- verify the isolation trigger is actually present;
 - verify the Primary Checkout is the intended repository;
-- verify the branch/path identity does not collide;
-- synchronize refs according to project policy.
+- verify branch/path identity does not collide.
 
 Creation must produce a Task Worktree under the declared `.worktrees/` namespace and report its branch, absolute or workspace-relative path, and runtime identity.
 
-### Assign
-
 ```yaml
-assignment:
+worktree_assignment:
   worktree: "one writing agent"
   branch: "the branch checked out by that worktree"
   mutable_runtime: "isolated by task identity"
   command_target: "explicitly selected for every operation"
 ```
-
-The agent must verify its current repository and worktree before editing.
 
 ### Implement and Validate
 
@@ -134,13 +165,13 @@ During implementation:
 
 1. Run the narrowest relevant validation first.
 2. Use project-owned commands, not ad hoc host tool invocations.
-3. Diagnose failures through the selected worktree's logs and status.
-4. Avoid touching the Primary Checkout or another Task Worktree.
+3. Diagnose failures through the selected checkout's logs and status.
+4. Avoid touching another writable checkout.
 5. Run the canonical final validation on the final HEAD before completion is reported.
 
 ### Preserve
 
-Before integration or removal:
+Before integration, checkout switching, or worktree removal:
 
 - review the working tree;
 - preserve intended changes in commits according to project policy;
@@ -155,15 +186,24 @@ Integration policy is project-specific, but the environment flow must preserve r
 - Do not commit Component Repository changes into the Workspace Repository.
 - Re-run required integration validation after the final integrated HEAD changes.
 - If Workspace tooling changed, verify affected Component Repositories against the intended workspace ref.
-- Keep the Primary Checkout clean after integration.
+- Return the Primary Checkout to the project-defined stable state after integration when required.
 
 This strategy does not decide pull-request approval or release policy.
 
 ## 5. Cleanup
 
+### No Worktree Was Created
+
+When the task used the current or Primary Checkout:
+
+- do not run worktree cleanup;
+- preserve the task branch according to project policy;
+- stop or remove only task-specific runtime resources that were actually created;
+- return the checkout to the expected branch only when the project workflow requires it.
+
 ### Normal Worktree Removal
 
-Normal removal must:
+When a Task Worktree was created, normal removal must:
 
 1. resolve the selected worktree deterministically;
 2. verify it belongs to the intended Component Repository;
@@ -185,12 +225,12 @@ Never combine branch deletion, worktree force removal, database deletion, and sh
 When an environment operation fails, inspect in this order:
 
 ```yaml
-1_selection: "selected workspace, component, branch, and worktree"
+1_selection: "selected workspace, component, branch, checkout, and optional worktree"
 2_host_boundary: "required control-plane tools and permissions"
 3_versions: "container/runtime/tool versions and lock files"
 4_runtime: "containers, networks, ports, mounts, user ownership, volumes"
 5_commands: "public command parameters and exit status"
-6_git_state: "dirty state, branch ownership, worktree metadata, remote refs"
+6_git_state: "dirty state, branch ownership, worktree metadata when applicable, remote refs"
 7_ci_difference: "provider setup or workspace-ref mismatch"
 ```
 
@@ -244,6 +284,7 @@ should_re_read:
 
 no_re_read_needed:
   - "routine use of established commands"
-  - "ordinary task worktree creation under established rules"
+  - "choosing the current checkout for an ordinary single-writer task"
+  - "ordinary Task Worktree creation after an actual isolation trigger is established"
   - "small internal script fix behind an unchanged command contract"
 ```

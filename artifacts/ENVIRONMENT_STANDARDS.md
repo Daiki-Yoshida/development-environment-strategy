@@ -4,7 +4,7 @@
 document_type: "environment_standards"
 target_audience: "ai_agents"
 language: "english"
-strategy_version: "1.0.0"
+strategy_version: "1.1.0"
 scope: "host boundary, Docker, command interface, Git safety, validation, and CI parity"
 ```
 
@@ -50,7 +50,7 @@ Rules:
 
 ### Resource Identity
 
-Every resource must be attributable to a project and, when relevant, a task/worktree.
+Every resource must be attributable to a project and, when relevant, a task or worktree.
 
 ```yaml
 identity_components:
@@ -65,7 +65,7 @@ properties:
 
 - Avoid generic names that reveal only a role, such as an unscoped `web`, `api`, or `database`.
 - Avoid random names when a stable project/task identity is available.
-- Use a task-specific Compose project name when parallel worktrees may run simultaneously.
+- Use a task-specific Compose project name only when parallel or explicitly isolated checkouts may run simultaneously.
 - Apply the same identity to containers, networks, mutable volumes, logs, and temporary output locations where practical.
 
 ### Files, Ownership, and Mounts
@@ -79,15 +79,15 @@ properties:
 ### Caches and Volumes
 
 - Share immutable or safely reusable dependency caches when this improves speed without cross-task corruption.
-- Isolate mutable state that can alter test or runtime results.
+- Isolate mutable state that can alter test or runtime results when multiple checkouts run concurrently.
 - Name volumes so ownership and deletion scope are clear.
 - Removing a task worktree must not silently remove shared caches used by other tasks.
 
 ### Ports and Networks
 
-- Parallel worktrees must not claim the same fixed host ports without an allocation rule.
+- Parallel checkouts must not claim the same fixed host ports without an allocation rule.
 - Prefer internal container networking when host exposure is unnecessary.
-- When host ports are required, derive or configure them explicitly per task.
+- When host ports are required, derive or configure them explicitly per isolated task.
 - A cleanup command must affect only the selected project's or task's network resources.
 
 ### Secrets
@@ -143,9 +143,12 @@ prohibited_pattern: "an ambiguous short name whose target or destructive effect 
 
 ## 4. Git Operation Safety
 
-- Keep the default branch or primary checkout stable; ordinary feature implementation should occur on task branches/worktrees.
-- One task worktree maps to one branch and one writing agent.
-- Verify the selected repository and worktree before mutation.
+- Keep the default branch stable. Ordinary feature implementation should occur on a task branch.
+- A task branch does not require a Task Worktree. Use the currently assigned checkout when only one writing task is active and no separate isolation is needed.
+- Create a Task Worktree only for concurrent writing, an explicitly requested stable secondary checkout, or another documented isolation need.
+- Do not create a worktree merely because `.worktrees/` exists or worktree commands are available.
+- One writable checkout maps to one writing agent at a time.
+- Verify the selected repository and checkout before mutation; verify the worktree as well when one is used.
 - Do not operate on repositories outside the declared workspace scope.
 - Normal worktree removal must refuse dirty worktrees.
 - Check for unpushed or otherwise unpreserved commits before removal when the workflow can determine this reliably.
@@ -179,13 +182,13 @@ A project environment should expose operations equivalent to:
 
 ```yaml
 discovery: "list available operations and required parameters"
-diagnosis: "report tool versions, selected repository/worktree, containers, ports, mounts, and common configuration failures"
+diagnosis: "report tool versions, selected repository/checkout, containers, ports, mounts, and common configuration failures"
 status: "show current project/task resources without mutation"
 validation: "run the canonical completion gate"
 ```
 
 - Diagnostics must not print secrets.
-- Diagnostic output should identify the selected task/worktree and container namespace.
+- Diagnostic output should identify the selected checkout and, when applicable, the task worktree and container namespace.
 - Validation should start with the narrowest useful checks during implementation and finish with the canonical gate before completion is reported.
 - Do not claim completion when the canonical gate fails or was not runnable; report the limitation and evidence.
 
