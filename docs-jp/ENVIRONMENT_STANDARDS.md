@@ -1,208 +1,195 @@
-# 開発環境の基準
+# 開発環境の実装基準
 
 ```yaml
 document_type: "environment_standards_translation"
 target_audience: "human_readers"
 language: "japanese"
 source: "../artifacts/ENVIRONMENT_STANDARDS.md"
-strategy_version: "1.0.0"
+strategy_version: "1.1.0"
 authority: "英語版 artifacts/ が正本。内容に差がある場合は英語版を優先する"
-対象: "ホスト境界、Docker、公開コマンド、Git安全性、検証、ローカルとCIの一致"
 ```
 
 ## 1. ホスト依存の境界
 
-ホストへ入れてよいツールを、固定されたパッケージ一覧ではなく「役割」で判断します。
+ツールを固定リストだけで判断せず、役割で分類します。
 
 ```yaml
-ホスト側を基本とする役割:
-  - "Dockerなどのコンテナ実行環境とCompose"
+ホスト側の基本役割:
+  - "DockerとCompose"
   - "Gitなどのソース管理"
-  - "Makeやシェルなどのコマンド振り分け"
+  - "Makeやshellなどのコマンド入口"
   - "認証と遠隔接続"
-代表例: ["Docker", "Git", "GitHub CLI", "Make", "shell", "SSH"]
-
-コンテナ側を基本とする役割:
-  - "言語ランタイム"
-  - "パッケージマネージャー"
-  - "コンパイラーとビルド環境"
-  - "テスト実行環境"
-  - "データベースやマイグレーション用CLI"
-  - "プロジェクト固有のクラウド・デプロイCLI"
+コンテナ側の基本役割:
+  - "言語runtime"
+  - "package manager"
+  - "compilerとbuild toolchain"
+  - "test runtime"
+  - "DB・migration CLI"
+  - "project固有のcloud・deploy CLI"
 ```
 
-### ルール
-
-- リポジトリ管理のコンテナで実行できる場合、プロジェクト固有ランタイムをホスト必須にしない。
-- AIエージェントがコンテナコマンドを面倒に感じたという理由だけで、ホストへパッケージを追加しない。
-- ホスト側へ例外的に置く場合は、コンテナでは不適切な理由と、バージョン差異を防ぐ方法を明記する。
-- 対話操作が重要なデスクトップツールはホスト側に置ける。ただし、可能であればCLI、ビルド、テスト部分はコンテナ側へ置く。
-- 日常的なプロジェクト操作で、管理者権限やroot権限を前提にしない。
+- リポジトリ管理されたコンテナ実行が現実的なら、project runtimeをホストへ要求しない。
+- エージェントがcontainer commandを面倒に感じたという理由だけで、host packageを追加しない。
+- host例外を設ける場合は、container化が不適切な理由とversion差異の管理方法を明記する。
+- 対話的desktop toolはhostに置けるが、buildやCLIは可能な限りcontainer側へ置く。
+- 日常操作でsudoなどの昇格権限を前提にしない。
 
 ## 2. Docker基準
 
-### Dockerファーストの実行
+### Dockerファースト
 
-- ビルド、テスト、lint、format、マイグレーション、プロジェクト固有CLIは、原則としてリポジトリ管理のDocker定義から実行する。
-- DockerfileとComposeファイルは、個人用メモではなく、バージョン管理された開発環境定義として扱う。
-- 事前に手作業で作ったネットワーク、グローバルパッケージ、既存コンテナなどへの隠れた依存を避ける。
-- 重要なランタイムやツールのバージョンは固定するか、意図した範囲に制限する。
-- 重要なツールで、意味なく `latest` タグへ依存しない。
-- コンテナ内でも依存関係のlockファイルを尊重する。
+- build、test、lint、format、migration、project固有CLIは、repository管理のDocker定義から実行する。
+- DockerfileやComposeは個人メモではなく、version管理された開発環境定義である。
+- 事前作成されたhost network、global package、手動containerへ隠れて依存しない。
+- 重要なruntimeやtoolはversionを固定または管理し、重要箇所で `latest` を使わない。
+- container内でもlockファイルを尊重する。
 
-### リソースの識別
+### resourceの識別
 
-すべてのDockerリソースは、どのプロジェクトが所有しているか判別できなければなりません。並列作業を行う場合は、どのタスクやworktreeが所有しているかも判別できる必要があります。
+すべてのresourceは、どのprojectが所有するか分かる必要があります。task固有の分離を行う場合だけ、taskやworktreeの識別子も含めます。
 
 ```yaml
-識別名に含めるもの:
-  必須:
-    - "ワークスペースまたはプロジェクト名"
-    - "リソースの役割"
-  必要に応じて:
-    - "実行環境"
-    - "Component Repository"
-    - "タスクまたはworktreeの識別子"
-
-必要な性質:
-  - "毎回同じ規則で決まる"
+必須:
+  - "workspaceまたはproject名"
+  - "resourceの役割"
+必要な場合だけ追加:
+  - "environment"
+  - "component"
+  - "taskまたはworktree"
+性質:
+  - "決定的"
   - "人が読める"
-  - "同じホスト内で衝突しにくい"
-  - "診断や対象限定の削除に使える"
+  - "host内で衝突しにくい"
+  - "診断と限定cleanupに使える"
 ```
 
-- `web`、`api`、`database` のように役割しか分からない汎用名を避ける。
-- 安定したプロジェクト名やTASK_IDがある場合、意味のない乱数名を使わない。
-- 複数worktreeを同時実行する可能性がある場合は、タスクごとにCompose project名を分ける。
-- 可能な範囲で、コンテナ、ネットワーク、可変ボリューム、ログ、一時生成物へ共通の識別情報を使う。
+- `web`、`api`、`database` のように役割しか分からない名前を避ける。
+- 安定した識別子があるなら無意味な乱数名を避ける。
+- task固有のCompose project名は、並列または明示的に隔離したcheckoutを同時実行する場合だけ使用する。
+- container、network、可変volume、log、temporary outputへ同じ識別体系を伝播する。
 
-### ファイル、所有権、マウント
+### file所有権とmount
 
-- コンテナがホストへ作成したファイルは、ホストユーザーが編集・削除できなければならない。
-- bind mount先へ出力する場合は、UID/GIDの受け渡しなど適切な所有権対策を行う。
-- 権限エラーを隠すために、開発コンテナ全体をroot実行することを標準にしない。
-- プロジェクトが明示的に所有する場合を除き、生成ファイルをソースコードのディレクトリへ混在させない。
-- キャッシュとビルド生成物はGit管理から除外する。
+- containerがhostへ作成したfileは、host userが編集・削除できるようにする。
+- bind mountした生成物にはUID/GID mappingなどを使う。
+- permission問題を理由にcontainer全体をroot実行へしない。
+- projectが意図的に所有する場合を除き、generated fileをsource directoryへ混在させない。
+- cacheとbuild outputはGit管理から除外する。
 
-### キャッシュとボリューム
+### cacheとvolume
 
-- タスク間で安全に再利用できる依存キャッシュは、開発速度のために共有してよい。
-- テストや実行結果を変える可能性がある可変状態は、タスクごとに分離する。
-- ボリューム名から所有者と削除範囲が分かるようにする。
-- Task Worktreeの削除時に、他タスクも使う共有キャッシュを黙って削除しない。
+- 安全に再利用できる依存cacheは共有してよい。
+- 複数checkoutの結果へ影響する可変状態は分離する。
+- volume名から所有者と削除範囲を判断できるようにする。
+- Task Worktree削除時に、他taskが使う共有cacheを黙って削除しない。
 
-### ポートとネットワーク
+### portとnetwork
 
-- 複数worktreeが同じ固定ホストポートを奪い合わないよう、割り当て規則を持つ。
-- ホストからアクセスする必要がない通信は、コンテナ内部ネットワークを使う。
-- ホストポートが必要な場合は、タスク単位で明示的に設定または算出する。
-- cleanupコマンドは、選択されたプロジェクトまたはタスクのネットワークだけを対象にする。
+- 並列checkoutが同じ固定host portを奪い合わないようにする。
+- host公開が不要ならcontainer内部networkを使う。
+- host portが必要な場合は、隔離taskごとに明示的に割り当てる。
+- cleanupは選択したprojectまたはtaskのnetworkだけを対象にする。
 
-### Secret
+### secret
 
-- SecretをDockerイメージへ埋め込まない。
-- Secretをリポジトリへコミットしない。
-- サンプルやテンプレートと、実際の値を分ける。
-- コマンド出力、ログ、診断結果、CIログへSecretを表示しない。
-- build時のSecretとruntime時のSecretは、それぞれの寿命に適した方法で渡す。
-- 通常のビルドやテストで、AIエージェントがSecretの中身を読む必要がない構造にする。
+- secretをimageへ焼き込まず、repositoryへcommitしない。
+- sampleと実値を分ける。
+- command出力、log、診断、CI traceへsecretを表示しない。
+- build-timeとruntimeのsecretは、それぞれに適した方法で渡す。
+- 通常のbuildやtestでAIエージェントがsecret実値を読む必要をなくす。
 
 ## 3. 公開コマンド
 
-プロジェクトは、日常操作を見つけやすくする公開コマンド入口を持つ必要があります。
+projectは、日常操作を見つけやすい公開command interfaceを持ちます。
 
 ```yaml
-推奨する役割分担:
-  Makefile: "公開する操作名、help、引数、単純な依存関係"
-  共通wrapper: "必要に応じて、対象worktreeの選択や環境準備を共通化するCLI入口"
-  scripts: "複雑な分岐、入力検証、複数処理の制御、後片付け、サービス固有処理"
+推奨構成:
+  Makefile: "公開操作名、help、parameter、単純な依存関係"
+  wrapper: "checkout選択や環境準備を共通化する任意のCLI入口"
+  scripts: "複雑な分岐、検証、orchestration、cleanup、provider固有処理"
 ```
 
-### Makefileのルール
+### Makefile
 
-- Makeターゲットは、生の長いコマンドを貼り付ける場所ではなく、安定した操作目的を表す。
-- 複雑なシェル処理は `scripts/` または同等の管理場所へ分離する。
-- helpターゲットで、利用可能な操作、引数、破壊的な効果を確認できるようにする。
-- 構造を持つ引数には専用変数を使い、引用符やシェル解釈が曖昧になる万能引数へ詰め込まない。
-- 可能であれば、ローカルとCIは同じターゲットまたは同じ下位スクリプトを使用する。
+- targetは生のcommand列ではなく、安定した目的を表す。
+- 複雑なshell処理は `scripts/` などへ分離する。
+- help targetで操作、parameter、破壊的効果を説明する。
+- 構造化parameterには専用変数を使い、quoteが曖昧になる万能引数を避ける。
+- ローカルとCIは、可能な限り同じtargetまたはscriptを呼ぶ。
 
-### ターゲット名
+### target名
 
-対象や副作用が曖昧になる場合は、`<対象>-<操作>` の形を使います。
+対象や副作用が曖昧になる場合は `<scope>-<action>` を使います。
 
-```yaml
-代表的な対象: ["docker", "git", "worktree", "db", "test", "deploy", "provider"]
-接頭辞なしを許容する場合: "プロジェクト全体で意味が一つに定まり、文書化されている操作"
-避けるもの: "実行前に対象や破壊範囲を判断できない短い名前"
-```
-
-- すべてのターゲットへ機械的に接頭辞を付ける必要はない。
-- `help`、`check`、`test`、`validate` は、プロジェクト内で意味が一つなら接頭辞なしでよい。
-- `up`、`down`、`reset`、`clean`、`deploy`、`logs` などは、通常は対象を付ける。
-- 古い呼び方を互換用aliasとして一時的に残せるが、正規のターゲットを明記する。
+- すべてへ機械的にprefixを付ける必要はない。
+- `help`、`check`、`test`、`validate` はproject内の意味が一つなら短いままでよい。
+- `up`、`down`、`reset`、`clean`、`deploy`、`logs` は通常scopeを必要とする。
+- 互換aliasを残す場合でも、正規targetを明記する。
 
 ### 操作の意味
 
-- コマンドの説明には、対象、外から確認できる変化、破壊範囲を含める。
-- 非破壊的な名前のまま、内部処理だけを破壊的に変更しない。
-- 停止、コンテナ削除、ボリューム削除、完全破棄は、データへの影響が違うなら別操作にする。
-- 最終検証を行う標準コマンドを一つ定義する。
-- 部分検証は実装中や診断のためのものであり、最終検証の代わりにはならない。
-- 失敗時は0以外の終了コードを返し、原因調査に使える出力を残す。
+- command文書には対象、見える効果、破壊範囲を書く。
+- 非破壊commandを同じ名前のまま破壊的処理へ変えない。
+- stop、container削除、volume削除、完全purgeを分ける。
+- 最終検証の標準commandを一つ定義する。
+- 部分検証は実装中や診断用であり、最終gateの代替ではない。
+- 失敗時はnon-zeroで終了し、診断可能な出力を残す。
 
 ## 4. Git操作の安全性
 
-- default branchまたはPrimary Checkoutを安定させ、通常の実装はタスク用ブランチとworktreeで行う。
-- 一つのTask Worktreeは、一つのブランチと一つの書き込みエージェントへ対応させる。
-- 変更操作の前に、対象リポジトリとworktreeを確認する。
-- 宣言されたワークスペース外のリポジトリを操作しない。
-- 通常のworktree削除は、未コミット変更があれば拒否する。
-- 運用上確認できる場合は、未pushなど未保存のコミットがないか削除前に確認する。
-- `--force` を通常削除の裏側に隠さない。強制削除は明示的な破壊操作にする。
-- worktreeの削除とブランチの削除は別判断にする。
-- 古いGit metadataのpruneを、実体ディレクトリを削除する許可として扱わない。
-- push、force-push、ブランチ削除、履歴書き換えは明示的な操作として残す。
+- default branchは安定させ、通常の変更はtask branchで行う。
+- **task branchを使うことは、Task Worktreeを作ることを意味しない。**
+- 書き込み作業が一つだけで追加隔離が不要なら、現在割り当てられたcheckoutを使う。
+- Task Worktreeは、並列書き込み、安定した別checkout、明示的な隔離要求がある場合だけ作る。
+- `.worktrees/` やworktree commandが存在するという理由だけで作らない。
+- 一つの書き込み可能checkoutを同時に所有する書き込みエージェントは一つとする。
+- 変更前に、対象repositoryとcheckoutを確認する。worktree利用時はworktreeも確認する。
+- 宣言されたworkspace外のrepositoryを操作しない。
+- 通常のworktree削除はdirty worktreeを拒否する。
+- 可能なら、未push・未保存commitも削除前に確認する。
+- `--force` は明示的な破壊commandだけで使う。
+- worktree cleanupとbranch削除は別の判断とする。
+- stale metadataのpruneを、実directory削除の許可として扱わない。
+- push、force-push、branch削除、history書き換えは明示操作とする。
 
 ## 5. 破壊的操作
 
 ```yaml
 通常操作:
-  動作: "ソース変更と永続データを保持する"
-  確認: "通常は事前確認を必要としない"
-
+  性質: "source変更と永続dataを保持する"
 破壊的操作:
-  動作: "ソース変更、コミット、ボリューム、DB、キャッシュ、遠隔状態を失う可能性がある"
-  必要条件:
-    - "名前から破壊的だと分かる"
-    - "対象範囲が狭く明確"
-    - "事前条件を検査する"
-    - "削除したものを明確に報告する"
+  性質: "source変更、commit、volume、DB、cache、remote状態を失う可能性がある"
+  必須:
+    - "明示的な名前"
+    - "狭い対象範囲"
+    - "事前条件確認"
+    - "削除内容の報告"
 ```
 
-- `docker system prune` のようなホスト全体操作を、通常のプロジェクトライフサイクルへ含めない。
-- cleanup対象は、安定したプロジェクト・タスク識別子で限定する。
-- DB reset、ボリューム削除、worktree強制削除、遠隔デプロイ先の破棄を、曖昧な一つの `clean` にまとめない。
+- global Docker pruneのようなhost全体操作を通常project lifecycleへ入れない。
+- cleanup対象は決定的なproject/task識別子で限定する。
+- DB reset、volume削除、worktree強制削除、remote deploy破棄を曖昧な `clean` にまとめない。
 
 ## 6. 診断と検証
 
-開発環境は、少なくとも次に相当する操作を公開します。
+project環境は、次に相当する操作を提供します。
 
 ```yaml
-操作一覧: "利用可能な操作と必要引数を表示する"
-診断: "ツールバージョン、選択リポジトリ・worktree、コンテナ、ポート、mount、代表的な設定不備を確認する"
-状態確認: "変更を加えず、現在のプロジェクト・タスクリソースを表示する"
-最終検証: "完了判定に使う標準ゲートを実行する"
+案内: "利用可能な操作と必要parameterを表示"
+診断: "tool version、選択repository・checkout、container、port、mount、よくある設定不良を表示"
+状態: "変更せず、現在のproject/task resourceを表示"
+検証: "完了判定用の標準gateを実行"
 ```
 
-- 診断結果へSecretを表示しない。
-- 診断結果には、選択中のタスク・worktreeとコンテナ名前空間を含める。
-- 実装中は必要最小限の検証から始め、完了報告前に最終HEADで標準の最終検証を行う。
-- 最終検証が失敗した、または実行できなかった場合は、完了したと報告しない。制約と確認できた証拠を報告する。
+- 診断でsecretを表示しない。
+- 選択checkoutを表示し、Task Worktree利用時だけworktreeとcontainer namespaceも表示する。
+- 実装中は狭い検証から始め、完了前に最終gateを実行する。
+- 最終gateが失敗・未実行なら完了と報告しない。
 
-## 7. ローカルとCIの共通化
+## 7. ローカルとCI
 
-- CIは、workflow YAML内へビルドやテスト本体を再実装せず、プロジェクト管理のコマンドを呼び出す。
-- 環境準備はローカルとCIで異なってよいが、最終的には同じ検証スクリプトへ合流させる。
-- CIサービス固有の認証や準備はCI側の端へ置き、プロジェクト固有動作はリポジトリ管理コマンドへ置く。
-- Component Repositoryが別のWorkspace RepositoryをCIで利用する場合、使用するbranch、tag、commitなどを明示する。
-- CIが意図せず、バージョン不明の外部Workspace Repositoryへ依存しないようにする。
+- CIのworkflow YAMLへbuild/test本体を再実装せず、project管理commandを呼ぶ。
+- provisioningが異なっても、最終的には同じ検証scriptへ合流させる。
+- provider固有準備はCI edgeに置き、project動作はrepository管理commandへ置く。
+- CIで別Workspace Repositoryを利用する場合は、使用refを明示する。
+- 未指定の外部workspace最新版へ偶然依存しない。

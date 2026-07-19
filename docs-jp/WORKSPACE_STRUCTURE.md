@@ -5,100 +5,125 @@ document_type: "workspace_structure_translation"
 target_audience: "human_readers"
 language: "japanese"
 source: "../artifacts/WORKSPACE_STRUCTURE.md"
-strategy_version: "1.0.0"
+strategy_version: "1.1.0"
 authority: "英語版 artifacts/ が正本。内容に差がある場合は英語版を優先する"
-対象: "リポジトリ構造、Primary Checkout、Task Worktree、開発環境のトップレベル配置"
 ```
 
 ## 1. リポジトリ構造
 
 ### Workspace Repository
 
-Workspace Repositoryは、開発環境の制御面を所有します。
+開発環境の制御面を所有するリポジトリです。
 
 ```yaml
-所有する:
-  - "DockerとComposeの定義"
-  - "Makefileと公開コマンドwrapper"
-  - "開発環境用scripts"
-  - "AIエージェント向けの開発環境コンテキスト"
-  - "worktreeの作成・診断・削除操作"
-  - "複数Component Repositoryの調整"
-通常は所有しない:
-  - "Component Repositoryのプロダクト履歴"
-  - "Component Repositoryのソースコード"
+担当:
+  - "DockerとCompose定義"
+  - "Makefileと公開command wrapper"
+  - "開発環境script"
+  - "AIエージェント向け環境context"
+  - "必要な場合のworktree作成・削除操作"
+  - "複数componentの調整"
+通常は担当しない:
+  - "componentのproduct履歴"
+  - "componentのsource code"
 ```
 
 ### Component Repository
 
-Component Repositoryは、一つのプロダクトまたは独立してバージョン管理される構成要素を所有します。
+productまたは独立versionを持つcomponentを所有するリポジトリです。
 
 ```yaml
-所有する:
-  - "プロダクトのソースコード"
-  - "プロダクトのテスト"
-  - "Component固有のCIとリリース設定"
-  - "Component固有のGit履歴"
-関係: "Workspace Repositoryの中へ配置できるが、Workspace側ではGit管理しない構成を取れる"
+担当:
+  - "product source code"
+  - "product test"
+  - "component固有のCIとrelease file"
+  - "componentのGit履歴"
+関係: "Workspace Repository内に置けるが、Workspace側でGit管理しなくてよい"
 ```
 
-Workspace RepositoryとComponent Repositoryは、別々のGitリポジトリと履歴を持てます。実際にGit submoduleを使っていない場合、この関係をsubmoduleと呼んではいけません。
+WorkspaceとComponentは別のGit履歴を持てます。実際にsubmoduleでないなら、この関係をGit submoduleと呼びません。
 
-### 一つのリポジトリで管理する場合
+### 単一リポジトリ
 
 Workspace Repositoryを分けることは必須ではありません。
 
-開発環境とプロダクトコードが同じライフサイクルを持ち、並列作業の調整にも別履歴が必要ない場合は、一つのリポジトリで管理します。その場合も、ホスト境界、公開コマンド、worktreeの基準はリポジトリ直下へ適用します。
+開発toolとproduct codeが同じlifecycleを持ち、別履歴や並列調整が不要なら、一つのrepository rootで同じ原則を適用します。
 
 ## 2. Primary Checkout
 
-各Component Repositoryは、ワークスペース内に一つの安定したPrimary Checkoutを持ちます。
+各Component Repositoryには、workspace内に一つのPrimary Checkoutを置きます。
 
 ```yaml
-主な用途:
-  - "fetchや同期"
-  - "worktreeの作成"
-  - "変更の統合と最終確認"
-  - "固定パスが必要な対話ツールからの参照"
-通常の機能開発: "推奨しない。Task Worktreeを使用する"
+用途:
+  - "project規則が許す場合の、単独AIエージェントによるtask branch実装"
+  - "fetchと同期"
+  - "必要な場合のworktree作成"
+  - "統合と最終確認"
+  - "対話toolが必要とする安定したcomponent path"
+default_branchの扱い: "実装前にtask branchへ切り替え、default branch上で直接実装しない"
 ```
 
-Primary Checkoutには、関係のないローカル変更を残さないようにします。安定した配置場所も開発環境契約の一部です。
+Primary Checkoutを常にdefault branchへ固定する必要はありません。書き込み作業が一つだけで別checkoutが不要なら、通常のfeature実装場所として使用できます。
 
-## 3. Task Worktree
+ただし、無関係なlocal変更を混在させず、安定したpathを保ちます。
 
-Task Worktreeは、Workspace Repository直下の `.worktrees/` に配置します。
+## 3. checkoutの選択
+
+安全性を満たす中で、最も単純なcheckout方式を選びます。
+
+```yaml
+現在またはPrimary_Checkoutを使う条件:
+  - "Component Repositoryで書き込み作業が一つだけ"
+  - "そのcheckoutでtask branchを安全に使える"
+  - "別branchを安定したpathで維持する必要がない"
+  - "独立した可変runtime状態が不要"
+Task_Worktreeを作る条件:
+  - "同じComponent Repositoryで複数の書き込み作業を並列実行する"
+  - "別branchを安定したpathで維持する必要がある"
+  - "ユーザーまたはproject規則が明示的に要求する"
+  - "独立して破棄できるcheckoutとruntime状態が必要"
+理由として不十分:
+  - ".worktrees/ が存在する"
+  - "worktree commandが用意されている"
+  - "taskにTASK_IDがある"
+```
+
+Task Worktreeは分離が必要な場合の道具です。通常の単独作業で毎回行う儀式ではありません。
+
+## 4. Task Worktree
+
+上記の選択条件に該当した場合だけ、Workspace Repositoryの `.worktrees/` 以下へ作成します。
 
 ```yaml
 標準形: ".worktrees/<component>/<task-identity>/"
-所有者: "一つのタスク、一つのブランチ、一つの書き込みエージェント"
-寿命: "一時的。作業開始時に作り、統合または中止後に削除する"
+所有: "一つのtask、一つのbranch、一つの書き込みエージェント"
+lifecycle: "隔離作業のために作成し、統合または中止後に削除する一時checkout"
 Git管理: "Workspace Repository側ではignoreする"
 ```
 
-Component Repositoryが一つしかない場合は、`.worktrees/<component>-<task>/` のような平坦な配置も許容できます。ただし、複数Component Repositoryを扱う、または将来的に増える可能性がある場合は、Componentごとに階層を分ける形を推奨します。
+componentが一つだけなら、flatな `.worktrees/<component>-<task>/` 形式も許容できます。複数componentがある場合は入れ子形式を推奨します。
 
-### Worktreeの識別名
+`.worktrees/` は空のままでも構いません。directoryの存在は、worktree作成の指示ではありません。
 
-Task Worktree名から、次を判断できるようにします。
+### 名前
 
-- 対象のComponent Repository
-- TASK_IDなどの作業識別子
-- 必要に応じて、短いブランチの説明
+Task Worktree名から次を識別できるようにします。
 
-既にTASK_IDなどの安定識別子がある運用では、それを使用します。乱数だけを識別子にしません。
+- Component Repository
+- taskまたは管理番号
+- 必要なら短いbranch名
 
-名前はファイルシステムで安全に扱え、衝突しにくい必要があります。ブランチ名をディレクトリ名へ変換する場合は、異なるブランチが同じ名前へ変換されないか検査します。衝突時に既存ディレクトリを黙って再利用してはいけません。
+既に安定したTASK_IDがあるなら利用できますが、TASK_IDがあるという理由だけでworktreeを作りません。
 
-### Worktreeの不変条件
+### 不変条件
 
-- worktreeで使用するブランチは、Workspace RepositoryではなくComponent Repositoryに属する。
-- 一つのブランチを、二つの書き込み可能なworktreeへ割り当てない。
-- 選択されたworktreeパスを、ビルド、テスト、format、ログ、生成物の処理まで伝える。
-- 並列worktreeには、別々の可変実行状態を割り当てる。
-- worktree削除時に、別操作であるブランチ削除を自動実行しない。実行する場合は、そのコマンドが明示的にブランチ削除も所有すると示す。
+- worktreeのbranchはComponent Repositoryに属する。
+- 一つのbranchを複数の書き込みworktreeへ割り当てない。
+- 選択worktree pathをbuild、test、format、log、生成物へ伝える。
+- 並列worktreeには別々の可変runtime状態を与える。
+- worktree削除時にbranchを自動削除しない。branch削除は別操作とする。
 
-## 4. 推奨するトップレベル構成
+## 5. 推奨トップレベル構成
 
 ```text
 <workspace>/
@@ -110,115 +135,100 @@ Task Worktree名から、次を判断できるようにします。
 ├─ documents/
 ├─ <component-a>/
 ├─ <component-b>/
-└─ .worktrees/
+└─ .worktrees/              # 任意。空でもよい
    ├─ <component-a>/
    │  └─ <task-identity>/
    └─ <component-b>/
       └─ <task-identity>/
 ```
 
-実際のファイル名は、使用技術に合わせて変更できます。重要なのは、名前そのものではなく責務です。
+filenameは技術ごとに変えて構いません。重要なのは責務です。
 
 ```yaml
-Makefile: "見つけやすい公開操作名と、下位処理への委譲"
-public_wrapper: "必要に応じて、共通CLI入口と対象選択を提供する"
-compose: "コンテナ構成と実行時定義"
-docker: "Dockerfileとコンテナ固有の補助ファイル"
-scripts: "開発環境操作の実処理"
-documents: "AI向けプロジェクト文書。documentation-strategyが管理する"
+Makefile: "見つけやすい公開操作名と委譲"
+public_wrapper: "任意の共通CLI入口とcheckout選択"
+compose: "container構造とruntime定義"
+docker: "Dockerfileとcontainer支援file"
+scripts: "開発環境操作の実装"
+documents: "AI向けproject文書。documentation-strategyが管理"
 component_paths: "独立Component RepositoryのPrimary Checkout"
-worktrees: "一時的なTask Worktree"
+worktrees: "必要な場合だけ作る一時Task Worktree"
 ```
 
-この構造を、アプリケーション内部のモジュール配置を決めるために使ってはいけません。ソースコード内部の構造は `design-principles` が担当します。
+この構造でapplication内部のmodule配置を決めてはいけません。code内部構造は `design-principles` が担当します。
 
-## 5. Git管理の境界
+## 6. Git管理境界
 
-### Workspace Repository側
+### Workspace Repository側でignoreするもの
 
-Workspace Repositoryでは、次をignore対象とします。
+- 独立Git履歴を持つComponent Repositoryのcheckout
+- worktree対応がある場合の `.worktrees/`
+- local secret
+- build・export生成物
+- runtime cache
+- 共有しないeditor・OS file
 
-- 独立したGit履歴を持つComponent Repositoryのチェックアウト
-- `.worktrees/`
-- 開発環境固有のSecret
-- ビルドやexportの生成物
-- runtimeキャッシュ
-- 意図して共有するものを除く、エディターやOSの一時ファイル
-
-ignoreへ追加するだけでは、リポジトリ関係の説明として不十分です。AGENTS.mdやプロジェクト文書で、そのパスが独立リポジトリであることを明示します。
+embedded repositoryをignoreするだけでなく、そのpathが独立repositoryであることをAGENTSやproject文書へ書きます。
 
 ### Component Repository側
 
-各Component Repositoryは、プロダクト固有のキャッシュ、ビルド生成物、生成ファイル、ツール固有状態について、自分自身のignoreルールを持ちます。
+product cache、build output、generated file、tool固有状態はComponent Repository自身のignore規則で管理します。
 
-Workspace Repositoryが、Component Repository内で生成されたファイルの所有者にならないようにします。
+Workspace RepositoryがComponent内の生成物を誤って所有しないようにします。
 
-## 6. 複数Component Repositoryのワークスペース
+## 7. 複数component
 
-一つのWorkspace Repositoryから、複数のComponent Repositoryを管理できます。
-
-```yaml
-必要条件:
-  - "各Component Repositoryに安定したPrimary Checkoutパスがある"
-  - "ワークスペース全体の操作でない場合、コマンドが対象Componentを明示する"
-  - "worktreeをComponentごとの名前空間へ分ける"
-  - "衝突する可能性があるリソース名へComponent識別子を含める"
-  - "Componentをまたぐ検証は、独立した明示的操作にする"
-```
-
-無関係なリポジトリを同じフォルダへ置くためだけに、Workspace Repositoryを作ってはいけません。共通ツール、調整、実行環境など、ワークスペースが実際に所有する責務が必要です。
-
-## 7. 識別情報の伝播
-
-一つの論理的なタスク識別子を、開発環境全体で使います。
+一つのWorkspace Repositoryで複数Component Repositoryを管理できます。
 
 ```yaml
-伝える先:
-  - "ブランチまたはタスク情報"
-  - "worktreeパス"
-  - "Compose project名やコンテナ名前空間"
-  - "分離対象の可変ボリュームとホストポート"
-  - "ログ"
-  - "一時ファイルと生成物の出力先"
+要件:
+  - "各componentに安定したPrimary Checkout pathがある"
+  - "workspace全体操作でない場合は対象componentを明示する"
+  - "worktree利用時はcomponent別にnamespaceを分ける"
+  - "衝突可能性があるresource名へcomponentを含める"
+  - "component横断検証は独立した明示操作にする"
 ```
 
-各システムで文字列形式が異なっても構いません。ただし、どの名前がどのタスクに対応するかを、決定的に判断できる必要があります。
+無関係なrepositoryを同じfolderへ置くだけのためにWorkspace Repositoryを作ってはいけません。共有toolや実際の調整責務が必要です。
 
-リソース名では、次を区別できるようにします。
+## 8. resource識別の伝播
+
+Task Worktreeまたはtask固有runtimeで隔離する場合は、同じ論理task識別子を環境全体へ伝えます。
 
 ```yaml
-workspace: "どの開発ワークスペースが所有しているか"
-component: "どのComponent Repositoryに属するか"
-task: "どのタスクまたはworktreeが可変状態を所有するか"
-role: "そのリソースが何を行うか"
+隔離時に伝える対象:
+  - "branchまたはtask metadata"
+  - "worktree path"
+  - "Compose project・container namespace"
+  - "可変volumeとhost port"
+  - "log"
+  - "一時・生成output path"
 ```
 
-## 8. WorkspaceからComponentへのツール依存
+単一checkoutと共通runtimeを意図的に使う場合、不要なtask専用namespaceを作りません。
 
-Component Repositoryが、別のWorkspace Repositoryにある開発ツールへ依存する場合があります。その場合、どのバージョンを使うか明示します。
+## 9. Workspace toolへの依存
+
+Component Repositoryが別Workspace Repository内のtoolへ依存する場合、使用versionを明示します。
 
 ```yaml
-選択方法:
-  移動する参照:
-    意味: "文書化されたbranchまたは現在のWorkspace Checkoutを使用する"
-    特徴: "更新は簡単だが、過去状態の再現性は弱くなる"
-  固定参照:
-    意味: "tagまたはcommitを使用する"
-    特徴: "再現性は高いが、更新を明示的に行う必要がある"
-原則: "CIやリリース検証が、参照先不明のWorkspaceバージョンを偶然使用してはいけない"
+moving_ref:
+  意味: "document化されたbranchまたは現在のworkspace checkoutを使う"
+  特徴: "更新は簡単だが、過去再現性は弱い"
+fixed_ref:
+  意味: "tagまたはcommitを使う"
+  特徴: "再現性は高いが、更新作業が必要"
 ```
 
-採用する方式を、プロジェクト文書またはCI設定へ記録します。ローカル開発では現在のWorkspace Checkoutを使い、正式な検証では固定参照を使う構成も可能です。
+CIやrelease検証が、指定されていないworkspace最新版へ偶然依存してはいけません。
 
-## 9. 他artifactとの境界
+## 10. 他artifactとの境界
 
 ```yaml
 development_environment_strategy:
-  担当: "リポジトリ・worktreeの配置と、開発環境に関するトップレベルフォルダ"
+  担当: "repository、checkout、worktree配置と開発環境top-level directory"
 design_principles:
-  担当: "アプリケーションモジュール、公開境界、依存方向、テスト構造"
+  担当: "application module、public code surface、依存方向、test architecture"
 documentation_strategy:
-  担当: "documents/ 内部の配置、案内、保守"
+  担当: "documents/ 内部構造、案内、保守"
 ```
-
-一つのフォルダに複数の意味がある場合も、それぞれの戦略を、その戦略が担当する観点にだけ適用します。
