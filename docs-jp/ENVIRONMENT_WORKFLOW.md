@@ -5,262 +5,272 @@ document_type: "environment_workflow_translation"
 target_audience: "human_readers"
 language: "japanese"
 source: "../artifacts/ENVIRONMENT_WORKFLOW.md"
-strategy_version: "1.0.0"
+strategy_version: "1.1.0"
 authority: "英語版 artifacts/ が正本。内容に差がある場合は英語版を優先する"
-対象: "導入、Task Worktreeのライフサイクル、検証、統合、後片付け、復旧"
 ```
 
 ## 1. 新規プロジェクトへの導入
 
 ### 手順1: リポジトリ構造を決める
 
-プロジェクトに適した構造を選びます。
-
 ```yaml
-一つのリポジトリ:
-  意味: "プロダクトコードと開発環境ツールを同じリポジトリで管理する"
-WorkspaceとComponentに分ける:
-  意味: "Workspace Repositoryが、一つ以上の独立したComponent Repositoryを管理する"
+単一repository: "product codeと開発環境toolを同じrepositoryで管理する"
+WorkspaceとComponent: "Workspace Repositoryが一つ以上の独立Component Repositoryを管理する"
 ```
 
-WorkspaceとComponentを分けるのは、次のような必要性がある場合だけです。
+別履歴、安定したcomponent root、共有tool、並列エージェント調整など、実際の必要性がある場合だけ後者を選びます。
 
-- Git履歴を分離したい
-- Component Repositoryの安定したルートが必要
-- 複数Componentで開発ツールを共有する
-- 複数AIエージェントの並列作業を調整する
+### 手順2: ホスト境界を決める
 
-### 手順2: ホストの境界を決める
+- host制御面へ置くtoolを列挙する。
+- project runtime、package manager、build、test、project固有CLIは原則containerへ置く。
+- host例外とversion差異の管理方法を記録する。
+- 通常commandが昇格権限を要求しないようにする。
 
-- ホストの制御面に置くツールを明示する。
-- 言語ランタイム、パッケージマネージャー、ビルド、テスト、プロジェクト固有CLIは、原則としてコンテナへ置く。
-- ホスト側へ置く例外がある場合は、理由とバージョン管理方法を記録する。
-- 日常操作に管理者権限を要求しない構成にする。
+### 手順3: 公開commandを作る
 
-### 手順3: 公開コマンドを作る
-
-- 通常はMakefileなど、利用可能な操作を見つけやすい入口を設ける。
-- worktree選択や環境準備の共通処理が必要なら、共通wrapperを設ける。
-- 複雑な処理は `scripts/` または同等の管理場所へ置く。
-- help、状態確認・診断、部分検証、最終検証、対象限定cleanupを定義する。
+- 通常はMakefileを公開command入口にする。
+- checkout選択や環境準備が複雑なら共通wrapperを追加する。
+- 複雑な処理は `scripts/` などへ分離する。
+- help、状態確認、診断、部分検証、最終検証、限定cleanupを用意する。
 - 通常操作と破壊的操作を分ける。
 
-### 手順4: リソース識別規則を決める
+### 手順4: resource識別を決める
 
-次を識別できる、安定した命名規則を定義します。
+次を安定した名前で識別します。
 
 - workspaceまたはproject
 - component
-- taskまたはworktree
-- resource role
+- resourceの役割
+- task固有隔離を使う場合だけtaskまたはworktree
 
-並列タスクへは、別々の可変リソースと、衝突しないホストポートを割り当てます。
+並列taskには、衝突しない可変resourceとhost portを割り当てます。
 
-### 手順5: リポジトリとworktreeの配置を決める
+### 手順5: repositoryと任意worktreeのpathを決める
 
 - 各Component RepositoryのPrimary Checkoutを決める。
-- Workspace Repository側で、独立したComponent Repositoryのパスをignoreする。
-- `.worktrees/` を作成し、Workspace Repository側でignoreする。
-- Task Worktreeの命名規則を決める。
-- コマンド内部を書き換えずに、対象worktreeを引数で切り替えられるようにする。
+- 独立Component RepositoryのpathをWorkspace Repository側でignoreする。
+- worktree対応を採用する場合だけ `.worktrees/` を定義してignoreする。
+- 必要時に使うworktree命名規則を決める。
+- command内部を書き換えず、現在checkoutまたは明示worktreeを対象にできるようにする。
+- worktree対応の確認だけを目的に、bootstrap時にTask Worktreeを作らない。
 
-### 手順6: 初期構築を検証する
+### 手順6: bootstrapを検証する
 
-clean clone、または同等の初期状態から、次を確認します。
+clean clone相当の状態から、次を確認します。
 
-- 開発環境を作成できる
-- ツールバージョンと選択パスを表示できる
-- 最小限の動作確認を実行できる
-- 標準の最終検証を実行できる
-- 検証で作成したリソースだけを削除できる
+- 環境を作成できる。
+- versionと選択pathを表示できる。
+- 最小checkが通る。
+- 最終検証が通る。
+- 検証で作成したresourceだけを削除できる。
 
-文書化されていないホスト前提が見つかった場合は報告します。
+文書化されていないhost前提があれば報告します。
 
 ## 2. 既存プロジェクトへの導入
 
-開発環境の改善を、無関係なリポジトリ再構成やコード全面改修に広げてはいけません。
+開発環境改善を理由に、無関係なrepository構造やcodeを全面改修してはいけません。
 
 ### 現状調査
 
-既存環境を次の観点で整理します。
-
 ```yaml
-ホスト依存: "インストール済みランタイム、パッケージマネージャー、SDK、CLI"
-操作入口: "文書化されたものと、実際には使われているが未文書のbuild・test・deployコマンド"
-Docker状態: "image、Compose、名前、port、volume、権限"
-Git構造: "リポジトリルート、埋め込みリポジトリ、branch、worktree"
-CI動作: "ローカルscriptsと重複または食い違っている処理"
-破壊的経路: "cleanup、reset、force remove、データ削除"
+host依存: "runtime、package manager、SDK、CLI"
+入口command: "文書化・未文書化のbuild、test、deploy"
+container状態: "image、Compose、名前、port、volume、permission"
+Git構造: "repository root、embedded repository、branch、任意worktree"
+CI: "local scriptとの重複や差異"
+破壊経路: "cleanup、reset、force削除、data削除"
 ```
 
-### 移行する順番
+### 移行順序
 
-1. 現在の動作を包む、安定した公開コマンドを作る。
-2. プロジェクト固有の実行処理を、管理されたコンテナへ移す。
-3. リソースの名前と所有範囲を整理する。
-4. 診断コマンドと標準の最終検証を追加する。
-5. 並列開発が必要なら、worktree対応を追加または整理する。
-6. CIをプロジェクト管理コマンドへ合わせる。
+1. 現在の動作を覆う安定した公開commandを作る。
+2. project固有処理を管理されたcontainerへ移す。
+3. resource識別と所有権を整える。
+4. 診断と最終検証を追加する。
+5. 並列開発または明示的隔離が必要な場合だけworktree対応を追加する。
+6. CIをproject管理commandへ合わせる。
 
-一度にすべてを変更せず、動いている状態を保ちながら、開発環境の境界を一つずつ変更します。
+一度に一つの開発環境境界だけを変更し、動作を維持します。
 
-### 既存環境を守るルール
+### 既存環境の保護
 
-- プロジェクト固有の明示的な規則と、この汎用戦略が衝突する場合は、プロジェクト規則を優先し、衝突内容を報告する。
-- リポジトリを黙って移動しない。
-- 環境状態やデータを黙って削除しない。
-- WorkspaceとComponentの分割は、依頼内容に明確に含まれる場合だけ行う。
-- 依頼範囲外で見つけた違反は報告するが、ついでに全面改修しない。
+- project固有規則とgeneric strategyが衝突した場合はproject規則を優先し、衝突を報告する。
+- repository移動や環境状態削除を黙って行わない。
+- 依頼に必要でないWorkspace・Component分割を導入しない。
+- 現在checkoutで単独作業を安全に行える場合、Task Worktreeを導入しない。
+- scope外の違反は報告し、ついでに全面修正しない。
 
-## 3. Task Worktreeのライフサイクル
+## 3. checkout選択と任意Task Worktree
 
-### 作成
+### checkout方式を選ぶ
 
-作成前に次を確認します。
-
-- 対象のComponent Repository
-- タスクとブランチ
-- Primary Checkoutが意図したリポジトリであること
-- ブランチ名やworktreeパスが既存と衝突しないこと
-- プロジェクト方針に沿ってremote refなどを同期していること
-
-作成後は、次を報告できるようにします。
-
-- ブランチ
-- 絶対パスまたはワークスペース相対パス
-- コンテナなどで使う実行時識別子
-
-Task Worktreeは、宣言された `.worktrees/` の名前空間へ作成します。
-
-### 割り当て
+編集前に、最も単純で安全な方式を選びます。
 
 ```yaml
-割り当て:
+現在またはPrimary_Checkout:
+  使用条件:
+    - "Component Repositoryで書き込み作業が一つだけ"
+    - "そのcheckoutでtask branchを安全に使える"
+    - "別branchを安定したpathで維持する必要がない"
+    - "独立した可変runtime状態が不要"
+  対応: "割り当て済みcheckoutを使い、worktreeを作らない"
+Task_Worktree:
+  使用条件:
+    - "複数の書き込みtaskまたはAIエージェントを並列実行する"
+    - "別branchを安定したpathで維持する必要がある"
+    - "ユーザーまたはproject規則が明示的に要求する"
+    - "独立して破棄できるcheckoutとruntime状態が必要"
+  対応: "Task Worktreeを作成し、すべての操作で明示選択する"
+```
+
+`.worktrees/`、worktree helper、TASK_IDの存在だけでは、worktreeを作る理由になりません。
+
+### 選択checkoutを準備する
+
+どちらの方式でも、次を確認します。
+
+- Component Repository
+- taskとtask branch
+- 選択checkoutが正しいrepositoryに属すること
+- project規則に従ったref同期
+- その書き込み可能checkoutを所有する書き込みエージェントが一つだけであること
+
+Primary Checkoutを使う場合は、project規則に従ってtask branchへ切り替えるか作成します。保護されたdefault branch上で直接実装しません。
+
+### 必要な場合だけTask Worktreeを作る
+
+作成前に、次を確認します。
+
+- 実際に並列または隔離条件が存在する。
+- Primary Checkoutが意図したrepositoryである。
+- branch名とpathが衝突しない。
+
+作成後は、branch、絶対またはworkspace相対path、runtime識別子を報告します。
+
+```yaml
+worktree割り当て:
   worktree: "一つの書き込みエージェント"
-  branch: "そのworktreeでcheckoutされているブランチ"
-  可変実行状態: "タスク識別子で分離する"
-  コマンド対象: "すべての操作で明示的に選択する"
+  branch: "そのworktreeでcheckoutしたbranch"
+  可変runtime: "task識別子で分離"
+  command対象: "すべての操作で明示選択"
 ```
-
-AIエージェントは、編集前に自分がいるリポジトリとworktreeを確認します。
 
 ### 実装と検証
 
-実装中は次の順番で進めます。
+1. 最も狭い関連検証から始める。
+2. host toolを直接呼ばず、project管理commandを使う。
+3. 選択checkoutのlogと状態から失敗を診断する。
+4. 他の書き込み可能checkoutへ触れない。
+5. 完了報告前に最終HEADで標準最終検証を実行する。
 
-1. 変更内容に合った、最も小さい検証から実行する。
-2. ホストツールを直接呼び出すのではなく、プロジェクト管理のコマンドを使う。
-3. 失敗時は、選択中worktreeのログと状態から診断する。
-4. Primary Checkoutや他のTask Worktreeを変更しない。
-5. 完了報告前に、最終HEADで標準の最終検証を実行する。
+### 変更を保存する
 
-### 変更の保存
+統合、checkout切替、worktree削除の前に、次を行います。
 
-統合または削除の前に、次を確認します。
-
-- working treeの変更内容
-- 必要な変更がプロジェクト方針に沿ってcommitされていること
-- 未追跡の生成ファイル
-- remoteへのpushなど、運用上必要な保存条件
+- working treeを確認する。
+- project規則に従って意図した変更をcommitへ保存する。
+- untracked generated fileを確認する。
+- 必要ならremoteなどへの保存条件を確認する。
 
 ## 4. 統合
 
-merge、rebase、Pull Requestなどの方針はプロジェクト固有ですが、開発環境操作はリポジトリ境界を守る必要があります。
+統合方式はproject固有ですが、repository境界を守ります。
 
-- branchを所有するリポジトリ内で、merge・rebase・PR操作を行う。
-- Component Repositoryの変更をWorkspace Repositoryへ誤ってcommitしない。
-- 統合後のHEADが変わった場合、必要な統合検証を再実行する。
-- Workspace側のツールが変わった場合、対象Component Repositoryを意図したWorkspace refで検証する。
-- 統合後もPrimary Checkoutをcleanな状態に保つ。
+- merge、rebase、PRはbranchを所有するrepositoryで行う。
+- Component Repositoryの変更をWorkspace Repositoryへcommitしない。
+- 統合後HEADで必要な検証を再実行する。
+- Workspace toolが変わった場合、意図したWorkspace refでComponentを検証する。
+- 必要ならPrimary Checkoutをproject規則の安定状態へ戻す。
 
-この戦略は、Pull Requestの承認方法やリリース方針までは決めません。
+このstrategyはPR承認やrelease方針を決めません。
 
 ## 5. 後片付け
 
+### worktreeを作らなかった場合
+
+現在またはPrimary Checkoutを使ったtaskでは、次のようにします。
+
+- worktree cleanupを実行しない。
+- task branchをproject規則に従って保存する。
+- 実際に作成したtask固有runtime resourceだけを停止・削除する。
+- project workflowが要求する場合だけ、期待branchへcheckoutを戻す。
+
 ### 通常のworktree削除
 
-通常削除は次を行います。
+Task Worktreeを作った場合だけ、通常削除で次を行います。
 
-1. 指定されたworktreeを安定した規則で特定する。
-2. 意図したComponent Repositoryに属することを確認する。
-3. 未コミット変更があれば削除を拒否する。
-4. プロジェクト方針に沿って保存されていないcommitがある場合、警告または拒否する。
-5. タスク専用のコンテナなど、runtimeリソースを停止・削除する。
-6. `--force` を使わずGit worktreeを削除する。
-7. 必要な場合だけ、古いGit metadataをpruneする。
-8. branchなど、削除後も残るものを報告する。
+1. 対象worktreeを決定的に解決する。
+2. 正しいComponent Repositoryに属することを確認する。
+3. 未commit変更があれば拒否する。
+4. 未保存commitがある場合は警告または拒否する。
+5. task専用runtime resourceを停止・削除する。
+6. forceなしでGit worktreeを削除する。
+7. 必要な場合だけstale metadataをpruneする。
+8. branchなど残るものを報告する。
 
-### 破壊的な完全削除
+### 破壊的purge
 
-purgeは、未保存の作業や永続データを失う可能性があります。通常削除とは別の明示的な操作にし、プロジェクトの確認方針に従って、実行前または直後に対象範囲を明確に報告します。
+purgeは未保存作業や永続dataを失う可能性があります。通常削除とは別の明示操作とし、対象範囲を報告します。
 
-branch削除、worktree強制削除、DB削除、共有キャッシュ削除を、曖昧な一つのcleanupへまとめてはいけません。
+branch削除、worktree強制削除、DB削除、共有cache削除を一つの曖昧なcleanupへまとめません。
 
 ## 6. 診断と復旧
 
-開発環境の操作が失敗した場合は、次の順番で確認します。
+失敗時は次の順番で確認します。
 
 ```yaml
-1_対象選択: "workspace、component、branch、worktreeが正しいか"
-2_ホスト境界: "必要な制御面ツールと権限があるか"
-3_バージョン: "container、runtime、tool、lockファイルが一致しているか"
-4_実行状態: "container、network、port、mount、ユーザー所有権、volume"
-5_コマンド: "公開コマンドの引数と終了コード"
-6_Git状態: "dirty状態、branch所有者、worktree metadata、remote ref"
-7_CI差異: "CI固有の準備やWorkspace refの不一致"
+1_対象選択: "workspace、component、branch、checkout、任意worktree"
+2_ホスト境界: "必要な制御面toolとpermission"
+3_version: "container、runtime、tool、lock file"
+4_runtime: "container、network、port、mount、所有権、volume"
+5_command: "公開command parameterとexit status"
+6_Git状態: "dirty状態、branch所有、必要な場合のworktree metadata、remote ref"
+7_CI差異: "provider準備またはWorkspace ref不一致"
 ```
 
-### 復旧ルール
-
-- ホスト全体を掃除する前に、問題のあるタスクリソースだけを再作成する。
-- rebuildや削除の前に、ソース変更を保存する。
-- 通常削除が失敗した理由を理解する前に、force削除を使わない。
-- 最初の診断手段として、グローバルなDocker pruneや広範囲のファイル削除を行わない。
-- 問題が起きている層と証拠を報告する。
-- 失敗した操作を再実行して成功するまで、修復完了とは報告しない。
+- host全体cleanupの前に、問題taskのresourceだけを再作成する。
+- rebuildや削除前にsource変更を保存する。
+- 通常失敗の理由を理解する前にforce削除しない。
+- 最初の診断としてglobal Docker pruneや広範囲file削除を行わない。
+- 失敗層と証拠を報告し、失敗操作の再実行が成功するまで修復完了としない。
 
 ## 7. 開発環境変更の確認レベル
 
-変更前に、影響レベルを分類します。
-
 ```yaml
 L0_観察のみ:
-  例: ["help表示", "状態確認", "診断", "変更を伴わないversion確認"]
-  対応: "そのまま実行してよい"
-
-L1_ローカルへの安全な追加:
-  例: ["非破壊的な新ターゲット", "新しい診断script", "タスク専用container設定"]
-  対応: "実行し、結果を報告する"
-
+  例: ["help", "status", "diagnostics", "変更を伴わないversion確認"]
+  対応: "そのまま実行"
+L1_安全なlocal追加:
+  例: ["非破壊target", "診断script", "task専用container設定"]
+  対応: "実行して報告"
 L2_構造変更:
-  例: ["WorkspaceとComponentへの分割", "リポジトリルート移動", "worktree配置変更", "標準コマンド名変更", "CIで使うWorkspace ref方針変更"]
-  対応: "依頼内容から明確に必要と判断できる場合だけ実行し、明示的に報告する"
-
-L3_破壊的またはホスト変更:
-  例: ["dirty worktreeの破棄", "branch・永続volumeの削除", "DB破棄", "ホスト全体のcleanup", "ホストruntimeの追加・削除", "Git履歴書き換え"]
-  対応: "ユーザーがその破壊効果を明示的に依頼していない限り、実行前に確認する"
+  例: ["Workspace・Component分割", "repository root移動", "worktree path変更", "標準command名変更", "CI Workspace ref方針変更"]
+  対応: "依頼から明確に必要な場合だけ実行し、明示報告"
+L3_破壊的またはhost変更:
+  例: ["dirty worktree破棄", "branch・永続volume削除", "DB破棄", "host全体cleanup", "host runtime追加・削除", "history書き換え"]
+  対応: "その破壊効果を明示依頼されていない限り事前確認"
 ```
 
- harmlessに見える名前の裏側へ破壊的処理を隠し、実際の確認レベルを下げてはいけません。
+無害に見えるcommand名の裏へ破壊的処理を隠し、確認levelを下げてはいけません。
 
 ## 8. 文書を読み直す条件
 
 ```yaml
 必ず読み直す:
-  - "この戦略を使うプロジェクトへ初めて触れる"
-  - "Workspace・Componentの構造を作成または変更する"
+  - "このstrategyを使うprojectへ初めて触れる"
+  - "Workspace・Component構造を作成または変更する"
   - "worktree対応を追加または再設計する"
-  - "ホストとコンテナの境界を変更する"
+  - "hostとcontainerの境界を変更する"
   - "破壊的な開発環境操作を追加する"
-
 読み直すことを推奨:
-  - "Dockerリソースの命名や分離を変える"
-  - "Makefileや公開コマンド構造を変える"
+  - "Docker resource命名や分離を変える"
+  - "Makefileや公開command構造を変える"
   - "ローカルとCIの経路を合わせる"
-  - "Workspaceツールのversion選択方法を変える"
-
+  - "Workspace tool version選択を変える"
 読み直し不要:
-  - "確立済みコマンドの日常利用"
-  - "確立済み規則に沿ったTask Worktree作成"
-  - "公開コマンド契約を変えない小さなscript修正"
+  - "確立済みcommandの日常利用"
+  - "単独書き込みtaskで現在checkoutを選ぶ"
+  - "実際の隔離条件がある場合の通常Task Worktree作成"
+  - "command契約を変えない小さな内部script修正"
 ```
