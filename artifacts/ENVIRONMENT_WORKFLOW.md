@@ -4,7 +4,7 @@
 document_type: "environment_workflow"
 target_audience: "ai_agents"
 language: "english"
-strategy_version: "1.1.0"
+strategy_version: "1.1.1"
 scope: "setup, checkout selection, optional task worktrees, validation, integration, cleanup, and recovery"
 ```
 

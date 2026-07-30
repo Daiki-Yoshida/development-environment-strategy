@@ -4,7 +4,7 @@
 document_type: "environment_standards"
 target_audience: "ai_agents"
 language: "english"
-strategy_version: "1.1.0"
+strategy_version: "1.1.1"
 scope: "host boundary, Docker, command interface, Git safety, validation, and CI parity"
 ```
 
@@ -19,7 +19,7 @@ host_default:
     - "source control"
     - "command router"
     - "authentication and remote access"
-  examples: ["Docker", "Git", "GitHub CLI", "Make", "shell", "SSH"]
+  examples: ["Docker", "Git", "GitHub CLI", "Make", "shell", "SSH", "tmux"]
 container_default:
   owned_roles:
     - "language runtime"
