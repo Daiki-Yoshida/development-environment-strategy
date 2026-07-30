@@ -5,7 +5,7 @@ document_type: "environment_standards_translation"
 target_audience: "human_readers"
 language: "japanese"
 source: "../artifacts/ENVIRONMENT_STANDARDS.md"
-strategy_version: "1.1.0"
+strategy_version: "1.1.1"
 authority: "英語版 artifacts/ が正本。内容に差がある場合は英語版を優先する"
 ```
 
@@ -18,7 +18,7 @@ authority: "英語版 artifacts/ が正本。内容に差がある場合は英�
   - "DockerとCompose"
   - "Gitなどのソース管理"
   - "Makeやshellなどのコマンド入口"
-  - "認証と遠隔接続"
+  - "SSH・tmux などの認証と遠隔接続"
 コンテナ側の基本役割:
   - "言語runtime"
   - "package manager"

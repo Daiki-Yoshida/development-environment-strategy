@@ -6,7 +6,7 @@ target_audience: "ai_agents"
 optimization: "token_efficiency"
 language: "english"
 role: "entry point for the exported development-environment guidance"
-strategy_version: "1.1.0"
+strategy_version: "1.1.1"
 ```
 
 Read this file first. Load only the documents required by the current task.

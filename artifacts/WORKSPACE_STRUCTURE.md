@@ -4,7 +4,7 @@
 document_type: "workspace_structure"
 target_audience: "ai_agents"
 language: "english"
-strategy_version: "1.1.0"
+strategy_version: "1.1.1"
 scope: "repository topology, checkouts, optional task worktrees, and top-level environment layout"
 ```
 
