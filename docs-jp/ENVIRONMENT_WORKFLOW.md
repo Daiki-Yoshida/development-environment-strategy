@@ -187,13 +187,25 @@ worktree割り当て:
 
 ## 5. 後片付け
 
+task専用resourceを作成した場合、task終了時にその最終状態を判断する責任が生じます。
+
+```yaml
+完了状態:
+  削除済み: "不要になったresourceを、通常の限定cleanupで削除した"
+  意図的に保持: "具体的な後続作業のために必要であり、resourceと保持理由を報告した"
+原則: "所有者や理由が不明な残存resourceを、完了状態として認めない"
+```
+
+共有resourceや永続dataは、taskが利用したという理由だけでtask cleanupの対象にしません。破壊的な削除は、後述のpurge規則に従います。
+
 ### worktreeを作らなかった場合
 
 現在またはPrimary Checkoutを使ったtaskでは、次のようにします。
 
 - worktree cleanupを実行しない。
 - task branchをproject規則に従って保存する。
-- 実際に作成したtask固有runtime resourceだけを停止・削除する。
+- 実際に作成したtask専用runtime resourceをすべて確認する。
+- 不要なresourceは削除し、意図的に保持するresourceは対象と理由を報告する。
 - project workflowが要求する場合だけ、期待branchへcheckoutを戻す。
 
 ### 通常のworktree削除
@@ -208,12 +220,15 @@ Task Worktreeを作った場合だけ、通常削除で次を行います。
 6. forceなしでGit worktreeを削除する。
 7. 必要な場合だけstale metadataをpruneする。
 8. branchなど残るものを報告する。
+9. 意図的に保持するtask専用resourceと、その理由を報告する。
 
 ### 破壊的purge
 
 purgeは未保存作業や永続dataを失う可能性があります。通常削除とは別の明示操作とし、対象範囲を報告します。
 
 branch削除、worktree強制削除、DB削除、共有cache削除を一つの曖昧なcleanupへまとめません。
+
+すべてのtask専用resourceが削除済み、または理由を伴って意図的に保持されている場合だけ、後片付け完了とします。想定外の残存resourceは無視せず報告します。
 
 ## 6. 診断と復旧
 
