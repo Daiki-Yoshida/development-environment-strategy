@@ -6,6 +6,9 @@ Thumbs.db
 .idea/
 .vscode/
 
+# AI tool configurations (local, not for public release)
+.serena/
+
 # Logs and temporary files
 *.log
 tmp/
