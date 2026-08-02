@@ -192,13 +192,25 @@ This strategy does not decide pull-request approval or release policy.
 
 ## 5. Cleanup
 
+Creating task-scoped resources creates an obligation to reconcile them when the task ends.
+
+```yaml
+completion_state:
+  removed: "the resource is no longer needed and was removed through normal, scoped cleanup"
+  intentionally_retained: "the resource is still needed for a concrete follow-up; report the resource and reason"
+rule: "Unowned or unexplained residual resources are not an acceptable completion state."
+```
+
+Shared resources and persistent data are not task-cleanup targets merely because a task used them. Destructive cleanup remains governed by the purge rules below.
+
 ### No Worktree Was Created
 
 When the task used the current or Primary Checkout:
 
 - do not run worktree cleanup;
 - preserve the task branch according to project policy;
-- stop or remove only task-specific runtime resources that were actually created;
+- reconcile every task-scoped runtime resource that was actually created;
+- remove resources that are no longer needed, or report intentionally retained resources and why they remain;
 - return the checkout to the expected branch only when the project workflow requires it.
 
 ### Normal Worktree Removal
@@ -212,13 +224,16 @@ When a Task Worktree was created, normal removal must:
 5. stop and remove task-scoped runtime resources;
 6. remove the Git worktree without force;
 7. prune stale metadata only when appropriate;
-8. report what remains, including the branch.
+8. report what remains, including the branch;
+9. report any intentionally retained task-scoped resources and why they remain.
 
 ### Destructive Purge
 
 A purge may discard work or persistent state. It must be a separate explicit operation and must report its scope before or immediately after execution according to the project's confirmation policy.
 
 Never combine branch deletion, worktree force removal, database deletion, and shared-cache deletion into one vague cleanup operation.
+
+Cleanup is complete only when every task-scoped resource is removed or intentionally retained with a stated reason. Unexpected residual resources must be reported rather than ignored.
 
 ## 6. Diagnosis and Recovery
 
