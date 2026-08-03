@@ -68,6 +68,14 @@ authority: "英語版 artifacts/ が正本。内容に差がある場合は英�
 - task固有のCompose project名は、並列または明示的に隔離したcheckoutを同時実行する場合だけ使用する。
 - container、network、可変volume、log、temporary outputへ同じ識別体系を伝播する。
 
+### resourceの作成と再利用
+
+- task、branch、worktreeの識別子があること自体は、別のimage、container、network、volumeを作る理由にならない。
+- build入力が同じなら、projectまたはcomponent単位のimageと安全に共有できるcacheを再利用する。
+- 並列実行、可変状態の分離、設定差異、または明示的なproject規則により共有が危険・不正確になる場合だけ、runtime resourceを分ける。
+- checkout、branch、task、worktreeが変わったという理由だけでimageをrebuild・retagしない。imageのbuild入力または必要toolchainが変わった場合に行う。
+- 実際の分離要件を満たすために必要な、最小限のresourceだけを分ける。
+
 ### file所有権とmount
 
 - containerがhostへ作成したfileは、host userが編集・削除できるようにする。
