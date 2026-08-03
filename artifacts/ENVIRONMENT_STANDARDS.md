@@ -68,6 +68,14 @@ properties:
 - Use a task-specific Compose project name only when parallel or explicitly isolated checkouts may run simultaneously.
 - Apply the same identity to containers, networks, mutable volumes, logs, and temporary output locations where practical.
 
+### Resource Creation and Reuse
+
+- A task, branch, or worktree identity does not by itself require a separate image, container, network, or volume.
+- Reuse project- or component-scoped images and safe caches when their build inputs are equivalent.
+- Create separate runtime resources only when concurrent execution, mutable-state isolation, differing configuration, or explicit project policy makes sharing unsafe or incorrect.
+- Do not rebuild or retag an image only because the selected checkout, branch, task, or worktree changed; rebuild when image build inputs or the required toolchain changed.
+- Allocate only the narrowest separate resource set required by the actual isolation need.
+
 ### Files, Ownership, and Mounts
 
 - Container-created host files must be editable and removable by the host user.
